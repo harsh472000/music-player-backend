@@ -11,6 +11,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:5173',
+  'https://music-player-frontend-git-main-harsh472000s-projects.vercel.app',
   process.env.FRONTEND_URL
 ];
 
@@ -20,15 +21,23 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.log('Blocked origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
 
 app.use(express.json());
+
+// Add security headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 
 connectDB();
 
