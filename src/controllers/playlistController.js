@@ -86,25 +86,19 @@ const addSongToPlaylist = async (req, res) => {
   const { songId, title, artist } = req.body;
 
   try {
-    // Find the playlist by its ID
     const playlist = await Playlist.findById(playlistId);
 
     if (!playlist) {
       return res.status(404).json({ message: "Playlist not found" });
     }
-
-    // Ensure that the user is the owner of the playlist
     if (playlist.user.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Check if the song is already in the playlist
     const songExists = playlist.songs.some((song) => song.songId === songId);
     if (songExists) {
       return res.status(400).json({ message: "Song already in playlist" });
     }
-
-    // Add the song to the playlist
     playlist.songs.push({ songId, title, artist });
 
     await playlist.save();
@@ -118,20 +112,19 @@ const removeSongFromPlaylist = async (req, res) => {
   const { playlistId, songId } = req.params;
 
   try {
-    // Find the playlist by its ID
     const playlist = await Playlist.findById(playlistId);
 
     if (!playlist) {
       return res.status(404).json({ message: "Playlist not found" });
     }
 
-    // Ensure that the user is the owner of the playlist
     if (playlist.user.toString() !== req.user.id) {
       return res.status(403).json({ message: "Not authorized" });
     }
 
-    // Remove the song from the playlist
-    const songIndex = playlist.songs.findIndex((song) => song.songId === songId);
+    const songIndex = playlist.songs.findIndex(
+      (song) => song.songId === songId
+    );
     if (songIndex === -1) {
       return res.status(404).json({ message: "Song not found in playlist" });
     }
@@ -144,7 +137,6 @@ const removeSongFromPlaylist = async (req, res) => {
     res.status(500).json({ message: "Error removing song from playlist" });
   }
 };
-
 
 module.exports = {
   createPlaylist,

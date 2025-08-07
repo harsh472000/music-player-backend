@@ -1,101 +1,118 @@
-const User = require("../models/user");
+
+const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("../config/jwt");
-const bcrypt = require("bcryptjs");
 
-// Register user
+const {
+  validateRegisterInput,
+  validateLoginInput,
+} = require("../utils/validate");
+
+// Helper: Generate JWT
+const generateToken = (userId) => {
+  return jwt.sign({ user: { id: userId } }, JWT_SECRET, { expiresIn: "30d" });
+};
+
+// Register
 const registerUser = async (req, res) => {
-  const { firstName, lastName, email, password } = req.body;
-
-  // Basic validation for empty fields
-  if (!firstName || !lastName || !email || !password) {
-    return res.status(400).json({ message: "Please provide all required fields" });
-  }
-
-  console.log("Registering user:", { firstName, lastName, email });
-
   try {
-    // Check if user already exists
-    const userExists = await User.findOne({ email });
-
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    // Hash password before saving
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create a new user
-    const user = await User.create({
+    const { firstName, lastName, email, password } = req.body;
+    const { isValid, errors } = validateRegisterInput({
       firstName,
       lastName,
       email,
-      password: hashedPassword,
+      password,
     });
 
-    // Generate JWT token
-    const token = jwt.sign({ user: { id: user._id } }, JWT_SECRET, {
-      expiresIn: "30d",
+    if (!isValid) {
+      return res.status(400).json({ message: "Validation failed", errors });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email: normalizedEmail }).lean();
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "Registration failed",
+        errors: { email: "User with this email already exists" },
+      });
+    }
+
+    const newUser = new User({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: normalizedEmail,
+      password, // will be hashed by pre-save hook
     });
 
-    // Return success message along with token and user details
-    res.status(201).json({
+    await newUser.save();
+
+    const token = generateToken(newUser._id);
+
+    const userData = {
+      id: newUser._id,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+      email: newUser.email,
+      createdAt: newUser.createdAt,
+    };
+
+    return res.status(201).json({
+      success: true,
       message: "User registered successfully",
       token,
-      user: {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      },
+      user: userData,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error, please try again later." });
+    console.error("Registration error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during registration",
+    });
   }
 };
 
-// Login user
+// Login
 const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
-  // Basic validation for empty fields
-  if (!email || !password) {
-    return res.status(400).json({ message: "Please provide email and password" });
-  }
-
   try {
-    // Find user by email
-    const user = await User.findOne({ email });
+    const { email, password } = req.body;
+    const { isValid, errors } = validateLoginInput({ email, password });
 
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!isValid) {
+      return res.status(400).json({ message: "Validation failed", errors });
     }
 
-    // Check if password matches
-    const isMatch = await bcrypt.compare(password, user.password);
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
 
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({
+        message: "Login failed",
+        errors: { credentials: "Invalid email or password" },
+      });
     }
 
-    // Generate JWT token
-    const token = jwt.sign({ user: { id: user._id } }, JWT_SECRET, {
-      expiresIn: "30d",
-    });
+    const token = generateToken(user._id);
 
-    // Return success message along with token and user details
-    res.json({
+    const userData = {
+      id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    };
+
+    return res.json({
+      success: true,
       message: "Login successful",
       token,
-      user: {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-      },
+      user: userData,
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error, please try again later." });
+    console.error("Login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during login",
+    });
   }
 };
 
