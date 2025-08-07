@@ -11,7 +11,7 @@ const app = express();
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://music-player-frontend-psi.vercel.app',
+  process.env.FRONTEND_S_URL,
   process.env.FRONTEND_URL
 ];
 
